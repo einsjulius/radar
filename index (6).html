@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Drop Radar — Item-Drop Dashboard</title>
+<meta name="theme-color" content="#08080c">
+<meta name="description" content="Berechnet und zeigt zukünftige Item-Drops in Echtzeit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   DESIGN-TOKENS
+   Discord-inspiriertes, dunkles Theme mit Glassmorphism.
+   Alle Farben/Abstände zentral, damit Dark/Light-Umschaltung einfach ist.
+   ===================================================================== */
+:root{
+  --bg:#08080c;
+  --bg-grad-1:#12122099;
+  --bg-grad-2:#0a0a10;
+  --surface: rgba(255,255,255,.045);
+  --surface-2: rgba(255,255,255,.07);
+  --border: rgba(255,255,255,.09);
+  --border-strong: rgba(255,255,255,.16);
+  --text:#eceef4;
+  --muted:#9aa1b4;
+  --faint:#6b7186;
+
+  --blurple:#5865f2;
+  --blurple-2:#7d8bff;
+  --gold:#ffce45;
+  --gold-2:#ffe08a;
+  --gold-glow: rgba(255,206,69,.32);
+  --candy-1:#e879f9;
+  --candy-2:#a855f7;
+  --candy-glow: rgba(192,84,240,.28);
+
+  --radius:18px;
+  --radius-sm:12px;
+  --shadow: 0 18px 40px -18px rgba(0,0,0,.75), 0 4px 14px -6px rgba(0,0,0,.6);
+  --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -20px rgba(88,101,242,.35);
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --sidebar-w: 240px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+/* Light Mode: gleiche Struktur, hellere Flächen */
+[data-theme="light"]{
+  --bg:#eef0f6;
+  --bg-grad-1:#ffffffaa;
+  --bg-grad-2:#e6e9f2;
+  --surface: rgba(255,255,255,.72);
+  --surface-2: rgba(255,255,255,.92);
+  --border: rgba(20,22,40,.10);
+  --border-strong: rgba(20,22,40,.18);
+  --text:#141628;
+  --muted:#565d75;
+  --faint:#8890a8;
+  --shadow: 0 18px 40px -20px rgba(60,66,110,.35), 0 2px 8px -4px rgba(60,66,110,.25);
+}
+
+/* ============================ RESET ============================ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+  line-height:1.5;
+  overflow-x:hidden;
+  min-height:100dvh;
+}
+/* Atmosphärischer Farbverlauf im Hintergrund */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(60% 55% at 80% -5%, rgba(88,101,242,.20), transparent 60%),
+    radial-gradient(50% 50% at 5% 10%, rgba(168,85,247,.14), transparent 55%),
+    radial-gradient(55% 60% at 50% 110%, rgba(255,206,69,.08), transparent 60%),
+    linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+a{color:inherit}
+::selection{background:var(--blurple);color:#fff}
+:focus-visible{outline:2px solid var(--blurple-2);outline-offset:2px;border-radius:6px}
+
+/* Scrollbar */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:10px}
+*::-webkit-scrollbar-track{background:transparent}
+
+/* ============================ LAYOUT ============================ */
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100dvh}
+
+/* --- Sidebar (Desktop) --- */
+.sidebar{
+  position:sticky;top:0;height:100dvh;
+  display:flex;flex-direction:column;gap:6px;
+  padding:22px 14px;
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  border-right:1px solid var(--border);
+  backdrop-filter:blur(14px);
+}
+.brand{display:flex;align-items:center;gap:11px;padding:6px 10px 20px}
+.brand-mark{
+  width:38px;height:38px;border-radius:11px;flex:none;
+  background:linear-gradient(140deg,var(--blurple),var(--candy-2));
+  display:grid;place-items:center;box-shadow:0 8px 22px -8px var(--blurple);
+}
+.brand-mark svg{width:22px;height:22px;color:#fff}
+.brand-name{font-weight:800;letter-spacing:-.02em;font-size:1.05rem}
+.brand-sub{font-size:.72rem;color:var(--muted);font-weight:500;margin-top:-3px}
+
+.nav{display:flex;flex-direction:column;gap:3px;flex:1}
+.nav-btn{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 13px;border-radius:12px;color:var(--muted);
+  font-weight:600;font-size:.92rem;transition:.18s var(--ease);width:100%;text-align:left;
+}
+.nav-btn svg{width:19px;height:19px;flex:none}
+.nav-btn:hover{background:var(--surface);color:var(--text)}
+.nav-btn.active{background:var(--surface-2);color:var(--text);box-shadow:inset 3px 0 0 var(--blurple-2)}
+.nav-badge{margin-left:auto;font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:20px;
+  background:var(--gold);color:#241a00}
+
+.sidebar-foot{border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.tz-chip{display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--faint);padding:0 8px}
+.tz-chip svg{width:14px;height:14px}
+
+/* --- Main --- */
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:30;
+  display:flex;align-items:center;gap:12px;
+  padding:14px 26px;
+  background:linear-gradient(180deg, rgba(8,8,14,.82), rgba(8,8,14,.35));
+  backdrop-filter:blur(16px);border-bottom:1px solid var(--border);
+}
+[data-theme="light"] .topbar{background:linear-gradient(180deg, rgba(238,240,246,.9), rgba(238,240,246,.4))}
+.topbar-title{font-weight:800;font-size:1.15rem;letter-spacing:-.02em}
+.topbar-mobile-brand{display:none;align-items:center;gap:9px;font-weight:800}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.icon-btn{
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--border);color:var(--muted);transition:.18s var(--ease);
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-strong)}
+.icon-btn svg{width:19px;height:19px}
+.icon-btn.on{color:var(--gold);border-color:var(--gold-glow)}
+.gear svg{transition:transform .5s var(--ease)}
+.gear:hover svg{transform:rotate(90deg)}
+
+.content{padding:26px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+.view{animation:rise .45s var(--ease) both}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ============================ CARDS ============================ */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  backdrop-filter:blur(12px);box-shadow:var(--shadow);
+}
+.section-title{display:flex;align-items:center;gap:10px;font-size:1.02rem;font-weight:800;
+  letter-spacing:-.01em;margin:0 2px 14px}
+.section-title .eyebrow{margin-left:auto;font-size:.74rem;font-weight:600;color:var(--faint)}
+
+/* ---- Dashboard Hero ---- */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;margin-bottom:18px}
+.hero-left{padding:24px;display:flex;flex-direction:column;gap:20px}
+.now-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.now-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 18px}
+.now-box .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700}
+.now-box .item{display:flex;align-items:center;gap:10px;margin-top:9px;font-weight:800;font-size:1.18rem;letter-spacing:-.01em}
+.now-box .emoji{font-size:1.5rem;line-height:1}
+.now-box .meta{font-size:.8rem;color:var(--muted);margin-top:4px}
+
+.countdown-main{display:flex;flex-direction:column;gap:10px}
+.countdown-main .clabel{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700}
+.cd-grid{display:flex;gap:10px}
+.cd-unit{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;
+  padding:14px 8px;text-align:center;position:relative;overflow:hidden}
+.cd-unit .n{font-size:2rem;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,var(--text),var(--muted));-webkit-background-clip:text;background-clip:text;color:transparent}
+.cd-unit .u{font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:700;margin-top:2px}
+
+.progress-wrap{margin-top:4px}
+.progress-track{height:9px;border-radius:20px;background:var(--surface-2);overflow:hidden;border:1px solid var(--border)}
+.progress-fill{height:100%;width:0%;border-radius:20px;
+  background:linear-gradient(90deg,var(--blurple),var(--candy-2));transition:width .9s linear}
+.progress-meta{display:flex;justify-content:space-between;font-size:.74rem;color:var(--muted);margin-top:7px}
+
+/* ---- Signatur: Zyklus-Ring ---- */
+.ring-card{padding:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;position:relative}
+.ring-card .ring-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700;align-self:flex-start}
+.ring-svg{width:220px;height:220px;transform:rotate(-90deg)}
+.ring-center{position:absolute;top:50%;left:50%;transform:translate(-50%,calc(-50% + 8px));text-align:center;pointer-events:none}
+.ring-center .pos{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700}
+.ring-center .big{font-size:2.1rem;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.ring-center .small{font-size:.76rem;color:var(--muted)}
+.ring-legend{display:flex;gap:16px;font-size:.74rem;color:var(--muted);margin-top:2px}
+.ring-legend span{display:flex;align-items:center;gap:6px}
+.dotc{width:9px;height:9px;border-radius:50%}
+
+/* ---- Große Item-Karten ---- */
+.big-cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.item-card{padding:22px;position:relative;overflow:hidden}
+.item-card::after{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
+  background:radial-gradient(120% 90% at 100% 0%, var(--card-glow), transparent 60%)}
+.item-card .ic-head{display:flex;align-items:center;gap:13px;position:relative;z-index:1}
+.ic-emoji{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;font-size:1.9rem;flex:none;
+  background:var(--surface-2);border:1px solid var(--border)}
+.ic-name{font-weight:800;font-size:1.2rem;letter-spacing:-.01em}
+.ic-rarity{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  padding:3px 9px;border-radius:20px;display:inline-block;margin-top:3px}
+.ic-star{margin-left:auto;color:var(--faint);transition:.2s;z-index:2;position:relative}
+.ic-star.fav{color:var(--gold);filter:drop-shadow(0 0 8px var(--gold-glow))}
+.ic-star svg{width:22px;height:22px}
+.ic-cd{display:flex;gap:8px;margin-top:18px;position:relative;z-index:1}
+.ic-cd .u{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:10px 6px;text-align:center}
+.ic-cd .u .n{font-size:1.35rem;font-weight:900;font-variant-numeric:tabular-nums}
+.ic-cd .u .l{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700}
+.ic-date{font-size:.82rem;color:var(--muted);margin-top:14px;position:relative;z-index:1;display:flex;align-items:center;gap:7px}
+.ic-actions{display:flex;gap:8px;margin-top:14px;position:relative;z-index:1;flex-wrap:wrap}
+
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:11px;
+  font-weight:700;font-size:.85rem;transition:.18s var(--ease);border:1px solid transparent}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:var(--blurple);color:#fff;box-shadow:0 10px 24px -12px var(--blurple)}
+.btn-primary:hover{background:var(--blurple-2);transform:translateY(-1px)}
+.btn-ghost{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-ghost:hover{background:var(--surface-2);border-color:var(--border-strong)}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#241a00;font-weight:800}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 12px 26px -12px var(--gold-glow)}
+
+/* ============================ TABELLE ============================ */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+thead th{position:sticky;top:0;background:rgba(14,14,22,.92);backdrop-filter:blur(8px);
+  text-align:left;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);padding:13px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+[data-theme="light"] thead th{background:rgba(255,255,255,.92)}
+tbody td{padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:var(--surface)}
+tbody tr:last-child td{border-bottom:none}
+.pill{display:inline-flex;align-items:center;gap:7px;font-weight:700;padding:4px 10px;border-radius:20px;font-size:.82rem}
+.pill .e{font-size:.95rem}
+.pos-badge{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;
+  font-weight:800;font-size:.78rem;background:var(--surface-2);border:1px solid var(--border)}
+.row-next{background:linear-gradient(90deg, rgba(88,101,242,.16), transparent)!important;
+  box-shadow:inset 3px 0 0 var(--blurple-2)}
+.row-next td:first-child{position:relative}
+.tag-next{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  background:var(--blurple);color:#fff;padding:2px 7px;border-radius:20px;margin-left:8px}
+.row-gold td{background:linear-gradient(90deg, rgba(255,206,69,.07), transparent)}
+
+/* ============================ KALENDER ============================ */
+.cal-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.cal-nav{display:flex;gap:6px}
+.cal-title{font-weight:800;font-size:1.15rem;letter-spacing:-.01em;min-width:180px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.cal-dow{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:center;padding:4px 0}
+.cal-cell{min-height:104px;border-radius:14px;border:1px solid var(--border);background:var(--surface);
+  padding:8px;display:flex;flex-direction:column;gap:4px;transition:.16s var(--ease);cursor:pointer;overflow:hidden}
+.cal-cell:hover{border-color:var(--border-strong);background:var(--surface-2);transform:translateY(-2px)}
+.cal-cell.other{opacity:.38}
+.cal-cell.today{border-color:var(--blurple-2);box-shadow:0 0 0 1px var(--blurple-2) inset}
+.cal-daynum{font-size:.8rem;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.cal-daynum .cnt{font-size:.62rem;color:var(--faint)}
+.cal-chip{font-size:.66rem;font-weight:700;padding:2px 6px;border-radius:7px;display:flex;align-items:center;gap:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-more{font-size:.64rem;color:var(--faint);font-weight:600}
+
+/* ============================ FORMS / SETTINGS ============================ */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:7px}
+.field .hint{font-size:.74rem;color:var(--faint);margin-top:6px}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=datetime-local],select{
+  width:100%;padding:11px 13px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--border);color:var(--text);transition:.16s;
+}
+input:focus,select:focus{border-color:var(--blurple-2);background:var(--surface)}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.check{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;
+  background:var(--surface);border:1px solid var(--border);cursor:pointer;font-size:.88rem;font-weight:600;transition:.15s}
+.check:hover{background:var(--surface-2)}
+.check input{width:18px;height:18px;accent-color:var(--blurple);cursor:pointer}
+.check.gold{border-color:var(--gold-glow)}
+
+/* Toggle Switch */
+.switch{position:relative;width:46px;height:26px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch .track{position:absolute;inset:0;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:20px;transition:.2s}
+.switch .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--muted);transition:.2s var(--ease)}
+.switch input:checked + .track{background:var(--blurple);border-color:var(--blurple)}
+.switch input:checked + .track .knob{transform:translateX(20px);background:#fff}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:13px 0;border-bottom:1px solid var(--border)}
+.row-between:last-child{border-bottom:none}
+.row-between .rb-title{font-weight:700;font-size:.92rem}
+.row-between .rb-sub{font-size:.78rem;color:var(--faint)}
+
+/* Item-/Zyklus-Editor */
+.slot{display:flex;align-items:center;gap:10px;padding:9px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);margin-bottom:8px}
+.slot .idx{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:8px;
+  background:var(--surface-2);font-weight:800;font-size:.78rem;color:var(--muted)}
+.slot select{flex:1}
+.slot .mini{width:34px;height:34px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:var(--surface-2);border:1px solid var(--border)}
+.slot-btn{width:30px;height:30px;flex:none;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);
+  color:var(--muted);display:grid;place-items:center;transition:.15s}
+.slot-btn:hover{color:var(--text);border-color:var(--border-strong)}
+.slot-btn svg{width:15px;height:15px}
+.lib-item{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);margin-bottom:8px}
+
+/* ============================ MODAL ============================ */
+.modal-back{position:fixed;inset:0;z-index:100;background:rgba(3,3,8,.6);backdrop-filter:blur(6px);
+  display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.modal-back.open{display:flex;animation:fade .2s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{width:100%;max-width:640px;background:var(--bg-grad-2);border:1px solid var(--border-strong);
+  border-radius:22px;box-shadow:0 40px 100px -30px rgba(0,0,0,.8);animation:pop .32s var(--ease)}
+[data-theme="light"] .modal{background:#fff}
+@keyframes pop{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+.modal-head{display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:inherit;border-radius:22px 22px 0 0;z-index:2}
+.modal-head h2{font-size:1.12rem;font-weight:800;letter-spacing:-.01em}
+.modal-body{padding:22px}
+.modal-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;
+  position:sticky;bottom:0;background:inherit;border-radius:0 0 22px 22px}
+.settings-group{margin-bottom:26px}
+.settings-group > h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
+  font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.stat{padding:22px;position:relative;overflow:hidden}
+.stat .sv{font-size:2.6rem;font-weight:900;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .sl{font-size:.86rem;color:var(--muted);margin-top:8px;font-weight:600}
+.stat .si{position:absolute;top:18px;right:18px;opacity:.16}
+.stat .si svg{width:38px;height:38px}
+
+/* Suche / Verlauf */
+.search-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+.search-bar .field{margin:0;flex:1;min-width:200px}
+.mini-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.mini-card{padding:18px}
+.mini-card .ml{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700}
+.mini-card .mv{font-weight:800;font-size:1.05rem;margin-top:8px;display:flex;align-items:center;gap:9px}
+.mini-card .ms{font-size:.8rem;color:var(--muted);margin-top:3px}
+.empty{padding:40px;text-align:center;color:var(--faint);font-weight:600}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120%);
+  background:var(--surface-2);border:1px solid var(--border-strong);backdrop-filter:blur(14px);
+  padding:13px 20px;border-radius:14px;font-weight:700;font-size:.9rem;z-index:200;
+  box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;transition:transform .35s var(--ease)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast svg{width:18px;height:18px;color:var(--gold)}
+
+/* Mobile Bottom Nav (versteckt am Desktop) */
+.mobile-nav{display:none}
+
+/* ============================ RESPONSIVE ============================ */
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr}
+  .ring-card{order:-1}
+  .big-cards{grid-template-columns:1fr}
+  .cal-cell{min-height:78px}
+}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .topbar-mobile-brand{display:flex}
+  .topbar-title{display:none}
+  .content{padding:18px 16px 96px}
+  .now-row{grid-template-columns:1fr}
+  .mini-cards{grid-template-columns:1fr}
+  .cd-unit .n{font-size:1.7rem}
+  .cal-title{min-width:auto;font-size:1rem}
+  .cal-grid{gap:5px}
+  .cal-cell{min-height:64px;padding:5px;border-radius:10px}
+  .cal-chip{font-size:.58rem;padding:1px 4px}
+  /* Bottom Tab-Bar */
+  .mobile-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;z-index:40;
+    background:rgba(10,10,18,.9);backdrop-filter:blur(18px);border-top:1px solid var(--border);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));justify-content:space-around;
+  }
+  [data-theme="light"] .mobile-nav{background:rgba(255,255,255,.9)}
+  .mnav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--faint);
+    font-size:.62rem;font-weight:700;padding:4px 8px;border-radius:10px}
+  .mnav-btn svg{width:21px;height:21px}
+  .mnav-btn.active{color:var(--blurple-2)}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="5"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Drop Radar</div>
+        <div class="brand-sub">Live Drop-Tracker</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-foot">
+      <div class="tz-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span id="tzLabel">Zeitzone</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-mobile-brand">
+        <div class="brand-mark" style="width:30px;height:30px;border-radius:9px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </div>
+        <span>Drop Radar</span>
+      </div>
+      <div class="topbar-title" id="viewTitle">Dashboard</div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="btnTheme" title="Design wechseln" aria-label="Design wechseln"></button>
+        <button class="icon-btn" id="btnNotif" title="Benachrichtigungen" aria-label="Benachrichtigungen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        </button>
+        <button class="icon-btn gear" id="btnSettings" title="Einstellungen" aria-label="Einstellungen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<!-- ============ MOBILE NAV ============ -->
+<nav class="mobile-nav" id="mobileNav"></nav>
+
+<!-- ============ SETTINGS MODAL ============ -->
+<div class="modal-back" id="settingsModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Einstellungen">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1l2.1-2.1M17 7l2.1-2.1"/></svg>
+      <h2>Einstellungen</h2>
+      <button class="icon-btn" id="closeSettings" style="margin-left:auto" aria-label="Schließen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:18px;height:18px" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="settingsBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="resetSettings">Zurücksetzen</button>
+      <button class="btn btn-primary" id="saveSettings">Speichern & anwenden</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   1. KONSTANTEN & STANDARDWERTE
+   Alles wird aus diesen Werten mathematisch berechnet – nichts hardcodiert.
+   ===================================================================== */
+const HOUR = 3600 * 1000;
+const STORE_KEY = "dropRadar.v1";
+
+// Standard-Konfiguration (dient als Fallback, wenn nichts gespeichert ist)
+const DEFAULTS = {
+  reference: "2026-07-04T10:00",   // Referenz-Drop (lokale Zeit) = Golden Mask
+  intervalHours: 5,                // Abstand zwischen zwei Drops
+  theme: "dark",
+  favoriteGolden: true,            // Golden Mask als Favorit markiert
+  // Item-Bibliothek: definiert Aussehen & Seltenheit
+  items: [
+    { id:"candy", name:"Candy Crown", emoji:"👑", rarity:"Mythic", c1:"#e879f9", c2:"#a855f7", secret:false },
+    { id:"golden", name:"Golden Mask", emoji:"🎭", rarity:"Secret", c1:"#ffce45", c2:"#ff9d2f", secret:true }
+  ],
+  // Zyklus: Reihenfolge der Item-IDs. Referenz zeigt immer auf den LETZTEN Slot.
+  cycle: ["candy","candy","candy","candy","candy","candy","candy","golden"],
+  // Benachrichtigungen
+  notif: {
+    enabled:false, sound:true,
+    leads:{ "5":false,"10":true,"15":false,"30":false,"60":false },
+    goldenOnly:false
+  }
+};
+
+// Navigations-Struktur
+const NAV = [
+  { id:"dashboard", label:"Dashboard", icon:'<path d="M3 13h8V3H3zM13 21h8V8h-8zM13 3v3h8V3zM3 21h8v-5H3z"/>' },
+  { id:"drops",     label:"Drop-Kalender", icon:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
+  { id:"calendar",  label:"Kalender", icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  { id:"search",    label:"Suche", icon:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>' },
+  { id:"history",   label:"Verlauf", icon:'<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/>' },
+  { id:"stats",     label:"Statistik", icon:'<path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/>' }
+];
+
+/* =====================================================================
+   2. STATE-VERWALTUNG (LocalStorage)
+   ===================================================================== */
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return structuredClone(DEFAULTS);
+    const s = JSON.parse(raw);
+    // sanftes Zusammenführen, damit neue Felder nicht fehlen
+    return {
+      ...structuredClone(DEFAULTS), ...s,
+      notif:{ ...DEFAULTS.notif, ...(s.notif||{}), leads:{ ...DEFAULTS.notif.leads, ...((s.notif||{}).leads||{}) } }
+    };
+  }catch(e){ return structuredClone(DEFAULTS); }
+}
+function saveState(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+/* =====================================================================
+   3. DROP-BERECHNUNG (KERNLOGIK)
+   Der komplette Zeitplan ergibt sich aus: Referenz + Intervall + Zyklus.
+   ===================================================================== */
+function refMs(){ return new Date(state.reference).getTime(); }
+function intervalMs(){ return state.intervalHours * HOUR; }
+function cycleLen(){ return state.cycle.length; }
+function refIndex(){ return cycleLen() - 1; } // Referenz = letzter Slot im Zyklus
+
+// Zeitpunkt des n-ten Drops relativ zur Referenz (n darf negativ sein)
+function dropTime(n){ return refMs() + n * intervalMs(); }
+
+// Position im Zyklus (0-basiert) für den n-ten Drop
+function cycleIndexAt(n){
+  const L = cycleLen();
+  return (((refIndex() + n) % L) + L) % L;
+}
+// Item-Objekt für den n-ten Drop
+function itemAt(n){
+  const id = state.cycle[cycleIndexAt(n)];
+  return state.items.find(it => it.id === id) || state.items[0];
+}
+// Index des aktuell laufenden (jüngsten) Drops zum Zeitpunkt now
+function currentN(now){ return Math.floor((now - refMs()) / intervalMs()); }
+// Index des nächsten kommenden Drops
+function nextN(now){ return currentN(now) + 1; }
+
+// Vollständiges Drop-Objekt bauen
+function makeDrop(n){
+  return { n, time:dropTime(n), pos:cycleIndexAt(n)+1, item:itemAt(n) };
+}
+// Das "spezielle" Item (Golden Mask) – erstes mit secret:true
+function goldenItem(){ return state.items.find(it => it.secret) || null; }
+
+// Nächster Drop eines bestimmten Items ab now (predicate optional)
+function nextDropWhere(now, predicate){
+  const start = nextN(now);
+  const L = cycleLen();
+  for(let i = 0; i <= L; i++){          // spätestens nach einem vollen Zyklus gefunden
+    const n = start + i;
+    if(predicate(itemAt(n))) return makeDrop(n);
+  }
+  return null;
+}
+function nextGolden(now){ const g = goldenItem(); return g ? nextDropWhere(now, it => it.id === g.id) : null; }
+function nextRegular(now){ const g = goldenItem(); return nextDropWhere(now, it => !g || it.id !== g.id); }
+
+/* =====================================================================
+   4. FORMATIERUNG / HILFSFUNKTIONEN
+   ===================================================================== */
+const pad = n => String(n).padStart(2,"0");
+const WD = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const MO = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
+function fmtDate(ms){ const d=new Date(ms); return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`; }
+function fmtTime(ms){ const d=new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function fmtWeekday(ms){ return WD[new Date(ms).getDay()]; }
+function fmtFull(ms){ return `${fmtWeekday(ms)}, ${fmtDate(ms)} · ${fmtTime(ms)}`; }
+function dayKey(ms){ const d=new Date(ms); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+
+// Millisekunden → {d,h,m,s}
+function breakdown(ms){
+  ms = Math.max(0, ms);
+  const s = Math.floor(ms/1000);
+  return { d:Math.floor(s/86400), h:Math.floor(s%86400/3600), m:Math.floor(s%3600/60), s:s%60 };
+}
+// kompakte Restzeit, z.B. "2 T 4 Std"
+function fmtRelative(ms){
+  const b = breakdown(ms);
+  if(b.d>0) return `${b.d} T ${b.h} Std`;
+  if(b.h>0) return `${b.h} Std ${b.m} Min`;
+  if(b.m>0) return `${b.m} Min ${b.s} s`;
+  return `${b.s} s`;
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg><span>${msg}</span>`;
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+
+// HTML-Bausteine für Items
+function itemPill(item){
+  return `<span class="pill" style="background:${item.c1}22;color:${item.c1};border:1px solid ${item.c1}44">
+    <span class="e">${item.emoji}</span>${item.name}</span>`;
+}
+
+/* =====================================================================
+   5. NAVIGATION / ROUTING
+   ===================================================================== */
+let currentView = "dashboard";
+
+function buildNav(){
+  const nav = document.getElementById("nav");
+  const mnav = document.getElementById("mobileNav");
+  nav.innerHTML = ""; mnav.innerHTML = "";
+  NAV.forEach(item=>{
+    const svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${item.icon}</svg>`;
+    // Sidebar
+    const b = document.createElement("button");
+    b.className = "nav-btn" + (item.id===currentView?" active":"");
+    b.innerHTML = `${svg}<span>${item.label}</span>`;
+    b.onclick = ()=>navigate(item.id);
+    nav.appendChild(b);
+    // Mobile
+    const m = document.createElement("button");
+    m.className = "mnav-btn" + (item.id===currentView?" active":"");
+    m.innerHTML = `${svg}<span>${item.label}</span>`;
+    m.onclick = ()=>navigate(item.id);
+    mnav.appendChild(m);
+  });
+}
+function navigate(id){
+  currentView = id;
+  document.getElementById("viewTitle").textContent = NAV.find(n=>n.id===id).label;
+  buildNav();
+  renderView();
+  document.getElementById("content").scrollTo?.(0,0);
+  window.scrollTo(0,0);
+}
+
+// Rendert die aktuell aktive Ansicht komplett neu
+function renderView(){
+  const c = document.getElementById("content");
+  const now = Date.now();
+  if(currentView==="dashboard") c.innerHTML = viewDashboard(now), afterDashboard();
+  else if(currentView==="drops") c.innerHTML = viewDrops(now), afterDrops();
+  else if(currentView==="calendar") renderCalendar();
+  else if(currentView==="search") c.innerHTML = viewSearch(now), afterSearch();
+  else if(currentView==="history") c.innerHTML = viewHistory(now);
+  else if(currentView==="stats") c.innerHTML = viewStats(now);
+  updateCountdowns(Date.now()); // sofort korrekte Zahlen
+}
+
+/* =====================================================================
+   6. ANSICHT: DASHBOARD
+   ===================================================================== */
+function viewDashboard(now){
+  const cur = makeDrop(currentN(now));
+  const nxt = makeDrop(nextN(now));
+  const g = goldenItem();
+  const reg = nextRegular(now);
+  const gold = nextGolden(now);
+
+  return `
+  <div class="view">
+    <div class="hero">
+      <div class="card hero-left">
+        <div class="now-row">
+          <div class="now-box">
+            <div class="label">Aktueller Drop</div>
+            <div class="item"><span class="emoji">${cur.item.emoji}</span>${cur.item.name}</div>
+            <div class="meta">seit ${fmtTime(cur.time)} · #${cur.pos} im Zyklus</div>
+          </div>
+          <div class="now-box">
+            <div class="label">Nächster Drop</div>
+            <div class="item"><span class="emoji">${nxt.item.emoji}</span>${nxt.item.name}</div>
+            <div class="meta">${fmtFull(nxt.time)} · #${nxt.pos}</div>
+          </div>
+        </div>
+        <div class="countdown-main">
+          <div class="clabel">Countdown bis zum nächsten Drop</div>
+          <div class="cd-grid" id="cdMain">
+            ${cdUnit("d","Tage")}${cdUnit("h","Std")}${cdUnit("m","Min")}${cdUnit("s","Sek")}
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+            <div class="progress-meta"><span id="progLabel">Fortschritt</span><span id="progPct">0%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signatur: Zyklus-Ring -->
+      <div class="card ring-card">
+        <div class="ring-title">Zyklus · ${cycleLen()} Drops</div>
+        ${cycleRingSVG(now)}
+        <div class="ring-center">
+          <div class="pos">Position</div>
+          <div class="big" id="ringPos">#${nxt.pos}</div>
+          <div class="small" id="ringSmall">von ${cycleLen()}</div>
+        </div>
+        <div class="ring-legend">
+          <span><span class="dotc" style="background:var(--candy-2)"></span>regulär</span>
+          ${g?`<span><span class="dotc" style="background:var(--gold)"></span>${g.name}</span>`:""}
+        </div>
+      </div>
+    </div>
+
+    <div class="big-cards">
+      ${reg?bigItemCard(reg, false):""}
+      ${gold?bigItemCard(gold, true):""}
+    </div>
+  </div>`;
+}
+function cdUnit(k,label){
+  return `<div class="cd-unit"><div class="n" data-cd="${k}">0</div><div class="u">${label}</div></div>`;
+}
+
+// Große Item-Karte (mit eigener, live aktualisierter Countdown-Zeile)
+function bigItemCard(drop, isGold){
+  const it = drop.item;
+  const glow = isGold ? "var(--gold-glow)" : "var(--candy-glow)";
+  const rarityBg = `${it.c1}22`, rarityCol = it.c1;
+  const star = isGold ? `<button class="ic-star ${state.favoriteGolden?"fav":""}" id="favStar" title="Favorit">
+      <svg viewBox="0 0 24 24" fill="${state.favoriteGolden?"currentColor":"none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+    </button>` : "";
+  return `
+  <div class="card item-card" style="--card-glow:${glow}">
+    <div class="ic-head">
+      <div class="ic-emoji">${it.emoji}</div>
+      <div>
+        <div class="ic-name">Nächste ${it.name}</div>
+        <span class="ic-rarity" style="background:${rarityBg};color:${rarityCol}">${it.rarity}</span>
+      </div>
+      ${star}
+    </div>
+    <div class="ic-cd" data-cd-target="${drop.time}">
+      <div class="u"><div class="n" data-cdc="d">0</div><div class="l">Tage</div></div>
+      <div class="u"><div class="n" data-cdc="h">0</div><div class="l">Std</div></div>
+      <div class="u"><div class="n" data-cdc="m">0</div><div class="l">Min</div></div>
+      <div class="u"><div class="n" data-cdc="s">0</div><div class="l">Sek</div></div>
+    </div>
+    <div class="ic-date">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      ${fmtFull(drop.time)}
+    </div>
+    <div class="ic-actions">
+      <button class="btn btn-ghost" data-copy="${drop.time}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Zeit kopieren
+      </button>
+      ${isGold?`<button class="btn btn-gold" id="jumpGolden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+        Zur Golden Mask
+      </button>`:""}
+    </div>
+  </div>`;
+}
+
+// SVG des Zyklus-Rings (Signatur-Element)
+function cycleRingSVG(now){
+  const L = cycleLen();
+  const R = 92, cx = 110, cy = 110;
+  const gap = 0.14;                      // Lücke zwischen Segmenten (rad)
+  const seg = (Math.PI*2)/L;
+  const curPos = cycleIndexAt(nextN(now)); // nächste Position hervorheben
+  let paths = "";
+  for(let i=0;i<L;i++){
+    // Item am Zyklus-Slot i (0..L-1)
+    const item = state.items.find(x=>x.id===state.cycle[i]) || state.items[0];
+    const a0 = i*seg + gap/2, a1 = (i+1)*seg - gap/2;
+    const x0 = cx + R*Math.cos(a0), y0 = cy + R*Math.sin(a0);
+    const x1 = cx + R*Math.cos(a1), y1 = cy + R*Math.sin(a1);
+    const large = (a1-a0) > Math.PI ? 1 : 0;
+    const isCur = (i===curPos);
+    const col = item.secret ? "var(--gold)" : "var(--candy-2)";
+    const w = item.secret ? 13 : 9;
+    paths += `<path d="M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}"
+      fill="none" stroke="${col}" stroke-width="${isCur?w+4:w}" stroke-linecap="round"
+      opacity="${isCur?1:0.34}" ${isCur?`filter="url(#glow)"`:""}/>`;
+  }
+  // Fortschritts-Arc (innerer Ring)
+  const rP = 66;
+  const circ = 2*Math.PI*rP;
+  return `<svg class="ring-svg" viewBox="0 0 220 220">
+    <defs>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="pgrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="var(--blurple)"/><stop offset="1" stop-color="var(--candy-2)"/>
+      </linearGradient>
+    </defs>
+    ${paths}
+    <circle cx="110" cy="110" r="${rP}" fill="none" stroke="var(--border)" stroke-width="7"/>
+    <circle id="ringProg" cx="110" cy="110" r="${rP}" fill="none" stroke="url(#pgrad)" stroke-width="7"
+      stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
+  </svg>`;
+}
+
+function afterDashboard(){
+  // Zeit kopieren
+  document.querySelectorAll("[data-copy]").forEach(b=>{
+    b.onclick = ()=>copyTime(+b.dataset.copy);
+  });
+  // Favorit-Stern
+  const star = document.getElementById("favStar");
+  if(star) star.onclick = ()=>{
+    state.favoriteGolden = !state.favoriteGolden;
+    state.notif.goldenOnly = state.favoriteGolden ? state.notif.goldenOnly : state.notif.goldenOnly;
+    saveState();
+    star.classList.toggle("fav", state.favoriteGolden);
+    star.querySelector("svg").setAttribute("fill", state.favoriteGolden?"currentColor":"none");
+    toast(state.favoriteGolden ? "Golden Mask favorisiert ⭐" : "Favorit entfernt");
+  };
+  // Sprung zur nächsten Golden Mask
+  const jump = document.getElementById("jumpGolden");
+  if(jump) jump.onclick = ()=>{
+    navigate("drops");
+    setTimeout(()=>{
+      const row = document.querySelector("tr[data-gold='1']");
+      if(row){ row.scrollIntoView({behavior:"smooth",block:"center"}); row.style.transition="background .4s";
+        row.style.background="rgba(255,206,69,.22)"; setTimeout(()=>row.style.background="",1200); }
+    },120);
+  };
+}
+
+/* =====================================================================
+   7. ANSICHT: DROP-KALENDER (Tabelle nächste 100)
+   ===================================================================== */
+function viewDrops(now){
+  const start = nextN(now);
+  const rows = [];
+  const g = goldenItem();
+  for(let i=0;i<100;i++){
+    const d = makeDrop(start+i);
+    const isGold = g && d.item.id===g.id;
+    const first = i===0;
+    rows.push(`<tr class="${first?"row-next":""} ${isGold?"row-gold":""}" data-gold="${isGold?1:0}">
+      <td><span class="pos-badge" style="${isGold?`background:${d.item.c1}22;border-color:${d.item.c1}55;color:${d.item.c1}`:""}">#${d.pos}</span>${first?'<span class="tag-next">Nächster</span>':""}</td>
+      <td>${fmtWeekday(d.time).slice(0,2)}, ${fmtDate(d.time)}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmtTime(d.time)} Uhr</td>
+      <td>${itemPill(d.item)}</td>
+      <td style="color:var(--muted)">${fmtRelative(d.time-now)}</td>
+    </tr>`);
+  }
+  return `
+  <div class="view">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:19px;height:19px" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Nächste 100 Drops
+      <span class="eyebrow">alle ${state.intervalHours} Std · Zyklus ${cycleLen()}</span>
+    </div>
+    <div class="ic-actions" style="margin-bottom:16px">
+      <button class="btn btn-ghost" id="icsAll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Als .ics exportieren</button>
+      <button class="btn btn-gold" id="icsGold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Nur Golden Masks</button>
+    </div>
+    <div class="table-wrap card" style="max-height:64vh;overflow-y:auto">
+      <table>
+        <thead><tr><th>Zyklus</th><th>Datum</th><th>Uhrzeit</th><th>Item</th><th>In</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function afterDrops(){
+  document.getElementById("icsAll").onclick = ()=>exportICS(false);
+  document.getElementById("icsGold").onclick = ()=>exportICS(true);
+}
+
+/* =====================================================================
+   8. ANSICHT: MONATSKALENDER
+   ===================================================================== */
+let calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
+
+function renderCalendar(){
+  const c = document.getElementById("content");
+  const now = Date.now();
+  const first = new Date(calYear, calMonth, 1);
+  const startDow = (first.getDay()+6)%7;             // Montag = 0
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const g = goldenItem();
+
+  // Alle Drops des sichtbaren Monats in Tages-Buckets sammeln
+  const monthStart = first.getTime();
+  const monthEnd = new Date(calYear, calMonth+1, 1).getTime();
+  const buckets = {};
+  let n = Math.ceil((monthStart - refMs())/intervalMs());
+  while(dropTime(n) < monthEnd){
+    if(dropTime(n) >= monthStart){
+      const d = new Date(dropTime(n)).getDate();
+      (buckets[d] = buckets[d]||[]).push(makeDrop(n));
+    }
+    n++;
+  }
+
+  const dows = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+  let cells = dows.map(d=>`<div class="cal-dow">${d}</div>`).join("");
+
+  const prevDays = new Date(calYear, calMonth, 0).getDate();
+  const todayD = new Date();
+  const totalCells = Math.ceil((startDow+daysInMonth)/7)*7;
+
+  for(let i=0;i<totalCells;i++){
+    const dayNum = i - startDow + 1;
+    if(dayNum < 1){                     // Vormonat
+      cells += `<div class="cal-cell other"><div class="cal-daynum">${prevDays+dayNum}</div></div>`;
+    } else if(dayNum > daysInMonth){    // Folgemonat
+      cells += `<div class="cal-cell other"><div class="cal-daynum">${dayNum-daysInMonth}</div></div>`;
+    } else {
+      const drops = buckets[dayNum]||[];
+      const isToday = todayD.getDate()===dayNum && todayD.getMonth()===calMonth && todayD.getFullYear()===calYear;
+      const chips = drops.slice(0,3).map(d=>{
+        const gold = g && d.item.id===g.id;
+        return `<div class="cal-chip" style="background:${d.item.c1}1e;color:${d.item.c1}">
+          <span>${d.item.emoji}</span>${fmtTime(d.time)}</div>`;
+      }).join("");
+      const more = drops.length>3 ? `<div class="cal-more">+${drops.length-3} weitere</div>` : "";
+      cells += `<div class="cal-cell ${isToday?"today":""}" data-day="${dayNum}">
+        <div class="cal-daynum"><span>${dayNum}</span><span class="cnt">${drops.length?drops.length+"×":""}</span></div>
+        ${chips}${more}</div>`;
+    }
+  }
+
+  c.innerHTML = `
+  <div class="view">
+    <div class="cal-head">
+      <div class="cal-title">${MO[calMonth]} ${calYear}</div>
+      <div class="cal-nav" style="margin-left:auto">
+        <button class="icon-btn" id="calToday" title="Heute" style="width:auto;padding:0 14px;font-weight:700;font-size:.82rem">Heute</button>
+        <button class="icon-btn" id="calPrev" aria-label="Vorheriger Monat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:18px;height:18px" stroke-linecap="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="icon-btn" id="calNext" aria-label="Nächster Monat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:18px;height:18px" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </div>
+    <div class="cal-grid">${cells}</div>
+  </div>`;
+
+  document.getElementById("calPrev").onclick = ()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); };
+  document.getElementById("calNext").onclick = ()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); };
+  document.getElementById("calToday").onclick = ()=>{ calMonth=new Date().getMonth(); calYear=new Date().getFullYear(); renderCalendar(); };
+  document.querySelectorAll(".cal-cell[data-day]").forEach(cell=>{
+    cell.onclick = ()=>showDayDetail(+cell.dataset.day, buckets[+cell.dataset.day]||[]);
+  });
+}
+
+// Detail-Popup für einen Kalendertag
+function showDayDetail(day, drops){
+  const ms = new Date(calYear, calMonth, day).getTime();
+  const g = goldenItem();
+  const list = drops.length ? drops.map(d=>{
+    const gold = g && d.item.id===g.id;
+    return `<div class="lib-item">
+      <div class="ic-emoji" style="width:40px;height:40px;font-size:1.3rem">${d.item.emoji}</div>
+      <div style="flex:1"><div style="font-weight:700">${d.item.name}</div>
+      <div style="font-size:.8rem;color:var(--muted)">#${d.pos} im Zyklus · ${d.item.rarity}</div></div>
+      <div style="font-weight:800;font-variant-numeric:tabular-nums">${fmtTime(d.time)}</div>
+    </div>`;
+  }).join("") : `<div class="empty">Keine Drops an diesem Tag.</div>`;
+  openModalCustom(`${WD[new Date(ms).getDay()]}, ${fmtDate(ms)}`, list);
+}
+
+/* =====================================================================
+   9. ANSICHT: SUCHE
+   ===================================================================== */
+function viewSearch(now){
+  const today = new Date();
+  const val = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  return `
+  <div class="view">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:19px;height:19px" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Datum durchsuchen
+    </div>
+    <div class="search-bar">
+      <div class="field"><label>Datum auswählen</label><input type="date" id="searchDate" value="${val}"></div>
+    </div>
+    <div id="searchResult"></div>
+  </div>`;
+}
+function afterSearch(){
+  const inp = document.getElementById("searchDate");
+  inp.onchange = ()=>runSearch(inp.value);
+  runSearch(inp.value);
+}
+function runSearch(dateStr){
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const dayStart = new Date(y, m-1, d, 0,0,0,0).getTime();
+  const dayEnd = dayStart + 86400000;
+  const g = goldenItem();
+
+  // Drops an diesem Tag
+  const drops = [];
+  let n = Math.ceil((dayStart - refMs())/intervalMs());
+  while(dropTime(n) < dayEnd){ if(dropTime(n)>=dayStart) drops.push(makeDrop(n)); n++; }
+
+  // Nächste Golden / Candy ab Tagesbeginn
+  const searchFrom = dayStart - intervalMs(); // damit auch Drop am Tag selbst gefunden wird
+  const golden = g ? nextDropWhere(searchFrom, it=>it.id===g.id) : null;
+  const reg = nextDropWhere(searchFrom, it=>!g || it.id!==g.id);
+
+  const dropList = drops.length ? drops.map(dp=>`
+    <tr><td><span class="pos-badge">#${dp.pos}</span></td>
+    <td style="font-variant-numeric:tabular-nums">${fmtTime(dp.time)} Uhr</td>
+    <td>${itemPill(dp.item)}</td></tr>`).join("") : "";
+
+  document.getElementById("searchResult").innerHTML = `
+    <div class="mini-cards">
+      ${golden?miniCard("Nächste Golden Mask", golden, "gold"):""}
+      ${reg?miniCard("Nächste "+reg.item.name, reg, "candy"):""}
+    </div>
+    <div class="section-title" style="margin-top:6px">Drops am ${fmtDate(dayStart)}<span class="eyebrow">${drops.length} Drops</span></div>
+    ${drops.length?`<div class="table-wrap card"><table>
+      <thead><tr><th>Zyklus</th><th>Uhrzeit</th><th>Item</th></tr></thead>
+      <tbody>${dropList}</tbody></table></div>`
+      :`<div class="card empty">An diesem Tag gibt es keine Drops.</div>`}
+  `;
+}
+function miniCard(label, drop, kind){
+  const col = kind==="gold" ? "var(--gold)" : "var(--candy-2)";
+  return `<div class="card mini-card" style="border-left:3px solid ${col}">
+    <div class="ml">${label}</div>
+    <div class="mv"><span style="font-size:1.3rem">${drop.item.emoji}</span>${fmtDate(drop.time)}</div>
+    <div class="ms">${fmtWeekday(drop.time)} · ${fmtTime(drop.time)} Uhr · in ${fmtRelative(drop.time-Date.now())}</div>
+  </div>`;
+}
+
+/* =====================================================================
+   10. ANSICHT: VERLAUF (letzte 200)
+   ===================================================================== */
+function viewHistory(now){
+  const last = currentN(now);
+  const g = goldenItem();
+  const rows = [];
+  for(let i=0;i<200;i++){
+    const d = makeDrop(last-i);         // rückwärts
+    const isGold = g && d.item.id===g.id;
+    rows.push(`<tr class="${isGold?"row-gold":""}">
+      <td><span class="pos-badge">#${d.pos}</span></td>
+      <td>${fmtWeekday(d.time).slice(0,2)}, ${fmtDate(d.time)}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmtTime(d.time)} Uhr</td>
+      <td>${itemPill(d.item)}</td>
+      <td style="color:var(--muted)">vor ${fmtRelative(now-d.time)}</td>
+    </tr>`);
+  }
+  return `
+  <div class="view">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:19px;height:19px" stroke-linecap="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
+      Vergangene Drops
+      <span class="eyebrow">letzte 200</span>
+    </div>
+    <div class="table-wrap card" style="max-height:70vh;overflow-y:auto">
+      <table><thead><tr><th>Zyklus</th><th>Datum</th><th>Uhrzeit</th><th>Item</th><th>Vor</th></tr></thead>
+      <tbody>${rows.join("")}</tbody></table>
+    </div>
+  </div>`;
+}
+
+/* =====================================================================
+   11. ANSICHT: STATISTIK
+   ===================================================================== */
+function viewStats(now){
+  const g = goldenItem();
+  const year = new Date().getFullYear();
+  const yStart = new Date(year,0,1).getTime();
+  const yEnd = new Date(year+1,0,1).getTime();
+
+  // Drops im laufenden Jahr zählen
+  let total=0, golden=0;
+  let n = Math.ceil((yStart-refMs())/intervalMs());
+  while(dropTime(n) < yEnd){ total++; if(g && itemAt(n).id===g.id) golden++; n++; }
+  const regular = total - golden;
+
+  const nextG = g ? nextGolden(now) : null;
+  const goldenIntervalH = cycleLen() * state.intervalHours; // fixer Abstand zwischen Golden Masks
+
+  const sIcon = p=>`<div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${p}</svg></div>`;
+
+  return `
+  <div class="view">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:19px;height:19px" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+      Statistik ${year}
+    </div>
+    <div class="stat-grid">
+      <div class="card stat" style="border-top:3px solid var(--gold)">
+        ${sIcon('<path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/>')}
+        <div class="sv" style="color:var(--gold)">${golden}</div>
+        <div class="sl">Golden Masks in ${year}</div>
+      </div>
+      <div class="card stat" style="border-top:3px solid var(--candy-2)">
+        ${sIcon('<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>')}
+        <div class="sv" style="color:var(--candy-1)">${regular.toLocaleString("de-DE")}</div>
+        <div class="sl">${g?state.items.find(i=>!i.secret)?.name||"Reguläre":"Reguläre"} Drops in ${year}</div>
+      </div>
+      <div class="card stat" style="border-top:3px solid var(--blurple)">
+        ${sIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>')}
+        <div class="sv" data-cd-mini="${nextG?nextG.time:0}">–</div>
+        <div class="sl">Bis zur nächsten Golden Mask${nextG?` · ${fmtDate(nextG.time)}`:""}</div>
+      </div>
+      <div class="card stat" style="border-top:3px solid var(--blurple-2)">
+        ${sIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}
+        <div class="sv">${goldenIntervalH}<span style="font-size:1.1rem;color:var(--muted)"> Std</span></div>
+        <div class="sl">Ø Abstand zwischen Golden Masks</div>
+      </div>
+      <div class="card stat">
+        ${sIcon('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>')}
+        <div class="sv">${total.toLocaleString("de-DE")}</div>
+        <div class="sl">Drops insgesamt in ${year}</div>
+      </div>
+      <div class="card stat">
+        ${sIcon('<circle cx="12" cy="12" r="9"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/>')}
+        <div class="sv">${((golden/total)*100).toFixed(1)}<span style="font-size:1.1rem;color:var(--muted)"> %</span></div>
+        <div class="sl">Anteil Golden Masks</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =====================================================================
+   12. LIVE-COUNTDOWN (Ticker, jede Sekunde)
+   Aktualisiert nur Text/Fortschritt – rendert Ansichten NICHT neu,
+   außer wenn ein Drop-Wechsel stattfindet (Grenzübergang).
+   ===================================================================== */
+let lastNext = null;
+
+function updateCountdowns(now){
+  const nextTime = dropTime(nextN(now));
+  const curTime = dropTime(currentN(now));
+  const rem = nextTime - now;
+  const b = breakdown(rem);
+
+  // Haupt-Countdown
+  setCd("d", b.d); setCd("h", b.h); setCd("m", b.m); setCd("s", b.s);
+
+  // Fortschrittsbalken
+  const pct = Math.min(100, ((now-curTime)/intervalMs())*100);
+  const fill = document.getElementById("progFill");
+  if(fill){
+    fill.style.width = pct.toFixed(1)+"%";
+    document.getElementById("progPct").textContent = pct.toFixed(0)+"%";
+    document.getElementById("progLabel").textContent = "Nächster Drop in " + fmtRelative(rem);
+  }
+
+  // Zyklus-Ring Fortschritt
+  const prog = document.getElementById("ringProg");
+  if(prog){
+    const r = 66, circ = 2*Math.PI*r;
+    prog.style.strokeDashoffset = (circ*(1-pct/100)).toFixed(1);
+  }
+
+  // Item-Karten Countdown (eigene Ziel-Zeit)
+  document.querySelectorAll("[data-cd-target]").forEach(box=>{
+    const bb = breakdown(+box.dataset.cdTarget - now);
+    const q = k=>box.querySelector(`[data-cdc="${k}"]`);
+    if(q("d")) q("d").textContent = bb.d;
+    if(q("h")) q("h").textContent = pad(bb.h);
+    if(q("m")) q("m").textContent = pad(bb.m);
+    if(q("s")) q("s").textContent = pad(bb.s);
+  });
+
+  // Mini-Countdown in Statistik
+  document.querySelectorAll("[data-cd-mini]").forEach(elm=>{
+    const t = +elm.dataset.cdMini;
+    if(t) elm.textContent = fmtRelative(t-now);
+  });
+}
+function setCd(k,v){ const e=document.querySelector(`[data-cd="${k}"]`); if(e) e.textContent = (k==="d"?v:pad(v)); }
+
+function tick(){
+  const now = Date.now();
+  updateCountdowns(now);
+  checkNotifications(now);
+  // Grenzübergang: neuer Drop ist "aktuell" geworden → betroffene Ansicht neu rendern
+  const nn = nextN(now);
+  if(lastNext===null) lastNext = nn;
+  else if(nn !== lastNext){
+    lastNext = nn;
+    if(["dashboard","drops","history","stats"].includes(currentView)) renderView();
+  }
+}
+
+/* =====================================================================
+   13. BENACHRICHTIGUNGEN
+   ===================================================================== */
+const firedNotifs = new Set();          // verhindert Doppel-Benachrichtigung (nur Session)
+
+function updateNotifButton(){
+  const btn = document.getElementById("btnNotif");
+  btn.classList.toggle("on", state.notif.enabled);
+  btn.title = state.notif.enabled ? "Benachrichtigungen aktiv" : "Benachrichtigungen aus";
+}
+async function toggleNotif(){
+  if(!state.notif.enabled){
+    if(!("Notification" in window)){ toast("Browser unterstützt keine Benachrichtigungen"); return; }
+    const perm = await Notification.requestPermission();
+    if(perm!=="granted"){ toast("Benachrichtigungen wurden blockiert"); return; }
+    state.notif.enabled = true; toast("Benachrichtigungen aktiviert 🔔");
+  } else {
+    state.notif.enabled = false; toast("Benachrichtigungen deaktiviert");
+  }
+  saveState(); updateNotifButton();
+}
+
+function checkNotifications(now){
+  if(!state.notif.enabled || Notification.permission!=="granted") return;
+  const leads = Object.entries(state.notif.leads).filter(([,v])=>v).map(([k])=>+k);
+  if(!leads.length) return;
+  const g = goldenItem();
+  // die nächsten ~2 Zyklen prüfen reicht für alle Vorlaufzeiten
+  const start = nextN(now);
+  for(let i=0;i<cycleLen()*2+2;i++){
+    const d = makeDrop(start+i);
+    const isGold = g && d.item.id===g.id;
+    if(state.notif.goldenOnly && !isGold) continue;
+    leads.forEach(lead=>{
+      const trigger = d.time - lead*60*1000;
+      const key = `${d.n}|${lead}`;
+      // Fenster von 1 Sekunde ab dem Trigger-Zeitpunkt
+      if(now >= trigger && now < trigger+1500 && !firedNotifs.has(key)){
+        firedNotifs.add(key);
+        fireNotification(d, lead);
+      }
+    });
+  }
+}
+function fireNotification(drop, lead){
+  const leadTxt = lead>=60 ? "1 Stunde" : lead+" Minuten";
+  try{
+    new Notification(`${drop.item.emoji} ${drop.item.name} in ${leadTxt}`, {
+      body:`Drop um ${fmtTime(drop.time)} Uhr · #${drop.pos} im Zyklus`,
+      tag:`drop-${drop.n}-${lead}`
+    });
+  }catch(e){/* bei blob-SW-Umgebungen ignorieren */}
+  if(state.notif.sound) playChime(drop.item.secret);
+}
+// Kurzer Ton via WebAudio (keine externe Datei nötig)
+let audioCtx;
+function playChime(golden){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const notes = golden ? [660,880,1175] : [523,784];
+    notes.forEach((f,i)=>{
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.type="sine"; o.frequency.value=f;
+      o.connect(gn); gn.connect(audioCtx.destination);
+      const t = audioCtx.currentTime + i*0.12;
+      gn.gain.setValueAtTime(0,t);
+      gn.gain.linearRampToValueAtTime(.25,t+.03);
+      gn.gain.exponentialRampToValueAtTime(.001,t+.4);
+      o.start(t); o.stop(t+.42);
+    });
+  }catch(e){}
+}
+
+/* =====================================================================
+   14. ICS-EXPORT & CLIPBOARD
+   ===================================================================== */
+function toICSDate(ms){                 // lokale Zeit → UTC-Stempel
+  const d = new Date(ms);
+  return d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+"T"
+       +pad(d.getUTCHours())+pad(d.getUTCMinutes())+pad(d.getUTCSeconds())+"Z";
+}
+function exportICS(goldenOnly){
+  const now = Date.now();
+  const g = goldenItem();
+  const start = nextN(now);
+  const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Drop Radar//DE","CALSCALE:GREGORIAN"];
+  let count=0;
+  for(let i=0; i<300 && count < (goldenOnly?30:60); i++){
+    const d = makeDrop(start+i);
+    if(goldenOnly && !(g && d.item.id===g.id)) continue;
+    lines.push("BEGIN:VEVENT",
+      `UID:drop-${d.n}@dropradar`,
+      `DTSTAMP:${toICSDate(now)}`,
+      `DTSTART:${toICSDate(d.time)}`,
+      `DTEND:${toICSDate(d.time+5*60*1000)}`,
+      `SUMMARY:${d.item.emoji} ${d.item.name} (Drop #${d.pos})`,
+      `DESCRIPTION:${d.item.rarity} · Position ${d.pos} von ${cycleLen()} im Zyklus`,
+      "END:VEVENT");
+    count++;
+  }
+  lines.push("END:VCALENDAR");
+  const blob = new Blob([lines.join("\r\n")], {type:"text/calendar"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = goldenOnly ? "golden-masks.ics" : "drops.ics";
+  a.click(); URL.revokeObjectURL(url);
+  toast(goldenOnly ? "Golden-Mask-Kalender exportiert 📅" : "Drop-Kalender exportiert 📅");
+}
+function copyTime(ms){
+  const txt = fmtFull(ms) + " Uhr";
+  navigator.clipboard?.writeText(txt).then(
+    ()=>toast("Zeit kopiert: "+txt),
+    ()=>toast("Kopieren nicht möglich")
+  );
+}
+
+/* =====================================================================
+   15. EINSTELLUNGEN (Modal)
+   ===================================================================== */
+const modal = document.getElementById("settingsModal");
+
+function openSettings(){
+  renderSettings();
+  modal.classList.add("open");
+}
+function closeSettings(){ modal.classList.remove("open"); }
+
+function renderSettings(){
+  const leadDefs = [["5","5 Minuten vorher"],["10","10 Minuten vorher"],["15","15 Minuten vorher"],
+                    ["30","30 Minuten vorher"],["60","1 Stunde vorher"]];
+  const itemOptions = state.items.map(it=>`<option value="${it.id}">${it.emoji} ${it.name}</option>`).join("");
+
+  const cycleRows = state.cycle.map((id,i)=>{
+    const it = state.items.find(x=>x.id===id)||state.items[0];
+    return `<div class="slot">
+      <div class="idx">${i+1}</div>
+      <div class="mini" style="background:${it.c1}22">${it.emoji}</div>
+      <select data-slot="${i}">${state.items.map(x=>`<option value="${x.id}" ${x.id===id?"selected":""}>${x.emoji} ${x.name}</option>`).join("")}</select>
+      <button class="slot-btn" data-up="${i}" title="Nach oben"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m18 15-6-6-6 6"/></svg></button>
+      <button class="slot-btn" data-down="${i}" title="Nach unten"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button class="slot-btn" data-del="${i}" title="Slot löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>`;
+  }).join("");
+
+  const libRows = state.items.map((it,i)=>`
+    <div class="lib-item">
+      <div class="ic-emoji" style="width:40px;height:40px;font-size:1.3rem;background:${it.c1}22">${it.emoji}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;display:flex;align-items:center;gap:8px">${it.name}
+          ${it.secret?`<span class="ic-rarity" style="background:var(--gold-glow);color:var(--gold)">Secret</span>`:""}</div>
+        <div style="font-size:.78rem;color:var(--muted)">${it.rarity}</div>
+      </div>
+      <input type="color" value="${it.c1}" data-itemcolor="${it.id}" style="width:36px;height:36px;padding:2px;border-radius:9px;cursor:pointer">
+      <button class="slot-btn" data-itemdel="${it.id}" title="Item löschen" ${state.items.length<=1?"disabled style=opacity:.3":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+    </div>`).join("");
+
+  document.getElementById("settingsBody").innerHTML = `
+    <!-- Referenz & Intervall -->
+    <div class="settings-group">
+      <h3>Zeitplan</h3>
+      <div class="field">
+        <label>Referenz-Drop (Datum & Uhrzeit)</label>
+        <input type="datetime-local" id="setRef" value="${state.reference}">
+        <div class="hint">Ein bekannter Golden-Mask-Drop. Alle anderen Drops werden davon aus berechnet.</div>
+      </div>
+      <div class="field">
+        <label>Drop-Intervall (Stunden)</label>
+        <input type="number" id="setInterval" min="0.25" step="0.25" value="${state.intervalHours}">
+        <div class="hint">Standard: 5 Stunden. Golden Mask erscheint alle ${cycleLen()*state.intervalHours} Std (Zyklus × Intervall).</div>
+      </div>
+    </div>
+
+    <!-- Zyklus -->
+    <div class="settings-group">
+      <h3>Zyklus-Reihenfolge <span style="color:var(--faint);font-weight:600;text-transform:none;letter-spacing:0">· ${state.cycle.length} Slots</span></h3>
+      <div id="cycleList">${cycleRows}</div>
+      <button class="btn btn-ghost" id="addSlot" style="width:100%;justify-content:center;margin-top:4px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:15px;height:15px" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Slot hinzufügen</button>
+    </div>
+
+    <!-- Item-Bibliothek -->
+    <div class="settings-group">
+      <h3>Items</h3>
+      <div id="libList">${libRows}</div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <input type="text" id="newItemName" placeholder="Neuer Item-Name">
+        <input type="text" id="newItemEmoji" placeholder="😀" style="width:64px;text-align:center">
+        <button class="btn btn-primary" id="addItem" style="flex:none">Hinzufügen</button>
+      </div>
+    </div>
+
+    <!-- Benachrichtigungen -->
+    <div class="settings-group">
+      <h3>Benachrichtigungen</h3>
+      <div class="checks">
+        ${leadDefs.map(([k,l])=>`<label class="check"><input type="checkbox" data-lead="${k}" ${state.notif.leads[k]?"checked":""}><span>${l}</span></label>`).join("")}
+      </div>
+      <div style="margin-top:10px">
+        <label class="check gold"><input type="checkbox" id="setGoldenOnly" ${state.notif.goldenOnly?"checked":""}><span>🎭 Nur Golden Mask</span></label>
+      </div>
+      <div class="row-between" style="margin-top:8px">
+        <div><div class="rb-title">Benachrichtigungston</div><div class="rb-sub">Kurzer Ton beim Auslösen</div></div>
+        <label class="switch"><input type="checkbox" id="setSound" ${state.notif.sound?"checked":""}><span class="track"><span class="knob"></span></span></label>
+      </div>
+      <div class="row-between">
+        <div><div class="rb-title">Benachrichtigungen aktiv</div><div class="rb-sub">Browser muss geöffnet sein</div></div>
+        <label class="switch"><input type="checkbox" id="setNotifOn" ${state.notif.enabled?"checked":""}><span class="track"><span class="knob"></span></span></label>
+      </div>
+    </div>
+
+    <!-- Darstellung -->
+    <div class="settings-group" style="margin-bottom:0">
+      <h3>Darstellung</h3>
+      <div class="row-between">
+        <div><div class="rb-title">Dunkles Design</div><div class="rb-sub">Umschalten zwischen Dark & Light</div></div>
+        <label class="switch"><input type="checkbox" id="setDark" ${state.theme==="dark"?"checked":""}><span class="track"><span class="knob"></span></span></label>
+      </div>
+    </div>
+  `;
+  bindSettingEvents();
+}
+
+function bindSettingEvents(){
+  // Zyklus: Slot ändern / verschieben / löschen
+  document.querySelectorAll("[data-slot]").forEach(sel=>{
+    sel.onchange = ()=>{ state.cycle[+sel.dataset.slot] = sel.value; saveState(); renderSettings(); };
+  });
+  document.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.up; if(i>0){ [state.cycle[i-1],state.cycle[i]]=[state.cycle[i],state.cycle[i-1]]; saveState(); renderSettings(); }});
+  document.querySelectorAll("[data-down]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.down; if(i<state.cycle.length-1){ [state.cycle[i+1],state.cycle[i]]=[state.cycle[i],state.cycle[i+1]]; saveState(); renderSettings(); }});
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(state.cycle.length<=1){ toast("Mindestens 1 Slot nötig"); return; }
+    state.cycle.splice(+b.dataset.del,1); saveState(); renderSettings(); });
+  document.getElementById("addSlot").onclick = ()=>{ state.cycle.push(state.items[0].id); saveState(); renderSettings(); };
+
+  // Item-Bibliothek
+  document.querySelectorAll("[data-itemcolor]").forEach(inp=>inp.onchange=()=>{
+    const it=state.items.find(x=>x.id===inp.dataset.itemcolor); it.c1=inp.value; saveState(); });
+  document.querySelectorAll("[data-itemdel]").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.itemdel;
+    if(state.items.length<=1) return;
+    state.items = state.items.filter(x=>x.id!==id);
+    state.cycle = state.cycle.map(c=>c===id?state.items[0].id:c); // gelöschtes Item ersetzen
+    saveState(); renderSettings(); });
+  document.getElementById("addItem").onclick = ()=>{
+    const name=document.getElementById("newItemName").value.trim();
+    const emoji=document.getElementById("newItemEmoji").value.trim()||"✨";
+    if(!name){ toast("Bitte einen Namen eingeben"); return; }
+    const id = "it"+Date.now();
+    state.items.push({ id, name, emoji, rarity:"Rare", c1:"#7d8bff", c2:"#5865f2", secret:false });
+    saveState(); renderSettings();
+  };
+
+  // Benachrichtigungs-Einstellungen (sofort speichern)
+  document.querySelectorAll("[data-lead]").forEach(cb=>cb.onchange=()=>{ state.notif.leads[cb.dataset.lead]=cb.checked; saveState(); });
+  document.getElementById("setGoldenOnly").onchange = e=>{ state.notif.goldenOnly=e.target.checked; saveState(); };
+  document.getElementById("setSound").onchange = e=>{ state.notif.sound=e.target.checked; saveState(); };
+  document.getElementById("setNotifOn").onchange = async e=>{
+    if(e.target.checked){ if(!state.notif.enabled) await toggleNotif(); if(!state.notif.enabled) e.target.checked=false; }
+    else if(state.notif.enabled){ await toggleNotif(); }
+  };
+  document.getElementById("setDark").onchange = e=>{ applyTheme(e.target.checked?"dark":"light"); };
+}
+
+// "Speichern & anwenden": Referenz, Intervall übernehmen
+function commitSettings(){
+  const ref = document.getElementById("setRef").value;
+  const iv = parseFloat(document.getElementById("setInterval").value);
+  if(ref) state.reference = ref;
+  if(iv && iv>0) state.intervalHours = iv;
+  saveState();
+  lastNext = null;              // Countdown-Grenze neu berechnen
+  renderView();
+  closeSettings();
+  toast("Einstellungen gespeichert ✓");
+}
+function resetSettings(){
+  if(confirm("Alle Einstellungen auf Standard zurücksetzen?")){
+    state = structuredClone(DEFAULTS);
+    saveState(); applyTheme(state.theme); renderSettings(); renderView();
+    toast("Auf Standard zurückgesetzt");
+  }
+}
+
+// Allgemeines Modal (für Kalender-Tagesdetail wiederverwendet)
+function openModalCustom(title, bodyHTML){
+  document.querySelector("#settingsModal .modal-head h2").textContent = title;
+  document.getElementById("settingsBody").innerHTML = bodyHTML;
+  document.querySelector("#settingsModal .modal-foot").style.display = "none";
+  modal.classList.add("open");
+  modal._custom = true;
+}
+
+/* =====================================================================
+   16. THEME
+   ===================================================================== */
+function applyTheme(t){
+  state.theme = t;
+  document.documentElement.setAttribute("data-theme", t);
+  document.querySelector('meta[name=theme-color]').setAttribute("content", t==="dark"?"#08080c":"#eef0f6");
+  const btn = document.getElementById("btnTheme");
+  btn.innerHTML = t==="dark"
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
+  saveState();
+}
+
+/* =====================================================================
+   17. PWA (Manifest + Service Worker, Best-Effort im Single-File)
+   ===================================================================== */
+function setupPWA(){
+  // Manifest als Blob einbinden (funktioniert für Installierbarkeit in Chromium)
+  try{
+    const manifest = {
+      name:"Drop Radar", short_name:"Drop Radar", start_url:".", display:"standalone",
+      background_color:"#08080c", theme_color:"#08080c",
+      icons:[{ src:iconDataURL(), sizes:"512x512", type:"image/png", purpose:"any maskable" }]
+    };
+    const mBlob = new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"});
+    const link = document.createElement("link");
+    link.rel="manifest"; link.href=URL.createObjectURL(mBlob);
+    document.head.appendChild(link);
+  }catch(e){}
+
+  // Service Worker (offline). Registrierung aus Blob wird von manchen Browsern
+  // blockiert – wir versuchen es, scheitern aber leise. Lokal geöffnet läuft
+  // die App ohnehin offline, da alles in dieser Datei liegt.
+  if("serviceWorker" in navigator){
+    const sw = `
+      const C="dropradar-v1";
+      self.addEventListener("install",e=>self.skipWaiting());
+      self.addEventListener("activate",e=>self.clients.claim());
+      self.addEventListener("fetch",e=>{
+        e.respondWith(caches.open(C).then(c=>c.match(e.request).then(r=>r||fetch(e.request).then(res=>{
+          if(e.request.method==="GET"){c.put(e.request,res.clone());} return res;
+        }).catch(()=>r))));
+      });`;
+    try{
+      const url = URL.createObjectURL(new Blob([sw],{type:"text/javascript"}));
+      navigator.serviceWorker.register(url).catch(()=>{/* still ok */});
+    }catch(e){}
+  }
+}
+// Minimales App-Icon (verlaufsgefüllter Kreis) als Data-URL
+function iconDataURL(){
+  const c=document.createElement("canvas"); c.width=c.height=512;
+  const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,512,512); g.addColorStop(0,"#5865f2"); g.addColorStop(1,"#a855f7");
+  x.fillStyle="#08080c"; x.fillRect(0,0,512,512);
+  x.fillStyle=g; x.beginPath(); x.arc(256,256,150,0,7); x.fill();
+  x.strokeStyle="#ffce45"; x.lineWidth=26; x.beginPath(); x.arc(256,256,150,-0.5,1.3); x.stroke();
+  return c.toDataURL("image/png");
+}
+
+/* =====================================================================
+   18. INITIALISIERUNG
+   ===================================================================== */
+function init(){
+  // Zeitzone anzeigen (automatische Erkennung)
+  try{
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const off = -new Date().getTimezoneOffset()/60;
+    document.getElementById("tzLabel").textContent = `${tz} (UTC${off>=0?"+":""}${off})`;
+  }catch(e){ document.getElementById("tzLabel").textContent = "Lokale Zeit"; }
+
+  applyTheme(state.theme);
+  updateNotifButton();
+  buildNav();
+  renderView();
+
+  // Topbar-Buttons
+  document.getElementById("btnTheme").onclick = ()=>applyTheme(state.theme==="dark"?"light":"dark");
+  document.getElementById("btnNotif").onclick = toggleNotif;
+  document.getElementById("btnSettings").onclick = openSettings;
+
+  // Modal-Steuerung
+  document.getElementById("closeSettings").onclick = ()=>{ modal._custom=false; document.querySelector("#settingsModal .modal-foot").style.display=""; closeSettings(); };
+  document.getElementById("saveSettings").onclick = commitSettings;
+  document.getElementById("resetSettings").onclick = resetSettings;
+  modal.addEventListener("click", e=>{ if(e.target===modal){ modal._custom=false; document.querySelector("#settingsModal .modal-foot").style.display=""; closeSettings(); }});
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape" && modal.classList.contains("open")){ modal._custom=false; document.querySelector("#settingsModal .modal-foot").style.display=""; closeSettings(); }});
+
+  // Ticker starten (1×/Sekunde)
+  tick();
+  setInterval(tick, 1000);
+
+  setupPWA();
+}
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
